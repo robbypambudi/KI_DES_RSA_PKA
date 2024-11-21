@@ -10,30 +10,30 @@ from rsa import RSA_Algorithm
 Local_keys = ""
 server_Keys = ""
 
-class RSA_Container():
+class RSAPair():
     def __init__(self) -> None:
         self.public_key: tuple[int, int] = None
         self.private_key: tuple[int, int] = None
 
-class ClientProgram():
+class SecureClient():
     def __init__(self) -> None:
         self.client_id             = ""
         self.hostname                = socket.gethostname()
-        self.public_port         = 5022
-        self.client_port         = 5023
-        self.public_socket       = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket       = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.des_key: bytes      = '\0'
-        self.server_ip           = ""
-        self.server_port         = ""
-        self.DES                 = Des()
-        self.RSA                 = RSA_Algorithm()
-        self.public_auth         = RSA_Container()
-        self.local_RSA           = RSA_Container()
-        self.client_RSA          = RSA_Container()
+        self.auth_port          = 5022
+        self.secure_port          = 5023
+        self.auth_socket        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.secure_socket        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.shared_key: bytes      = '\0'
+        self.server_address            = ""
+        self.server_port          = ""
+        self.des_handler                  = Des()
+        self.rsa_handler                  = RSA_Algorithm()
+        self.auth_keys          = RSAPair()
+        self.local_keys            = RSAPair()
+        self.partner_keys           = RSAPair()
         self.ssl_context         = None
         self.lock                = threading.Lock()
-        self.should_regenerate_des = False
+        self.regen_required  = False
 
     @staticmethod
     def pack_tuple(int_tuple: tuple[int, int]) -> bytes:
@@ -52,81 +52,81 @@ class ClientProgram():
         num_integers = len(packed_message) // 8 
         return list(struct.unpack(f'<{num_integers}Q', packed_message))
     
-    def __StartPublicAuthSocket(self):       
-        self.public_socket.connect((self.hostname, self.public_port)) 
-        self.server_ip, self.server_port = self.public_socket.getpeername()
-        print(f"Connected to server at IP: {self.server_ip}, Port: {self.server_port}")
+    def initiate_auth_connection(self):       
+        self.auth_socket .connect((self.hostname, self.auth_port )) 
+        self.server_address , self.server_port  = self.auth_socket .getpeername()
+        print(f"Connected to server at IP: {self.server_address }, Port: {self.server_port }")
 
         # Additional Validation
         confirmation = input("Do you want to accept this server connection? (yes/no): ")
         if confirmation.lower() == 'no' :
             print("Connection Refused ! Terminating Connection ...")
-            self.public_socket.close()
+            self.auth_socket .close()
             return False
         else :
             print("Connection Accepted !\n")
             True
 
-    def __StartClientSocket(self):
-        self.client_socket.connect((self.hostname, self.client_port)) 
-        self.server_ip, self.server_port = self.client_socket.getpeername()
-        print(f"Connected to server at IP: {self.server_ip}, Port: {self.server_port}")
+    def initiate_secure_connection(self):
+        self.secure_socket .connect((self.hostname, self.secure_port )) 
+        self.server_address , self.server_port  = self.secure_socket .getpeername()
+        print(f"Connected to server at IP: {self.server_address }, Port: {self.server_port }")
 
         # Additional Validation
         confirmation = input("Do you want to accept this server connection? (yes/no): ")
         if confirmation.lower() == 'no' :
             print("Connection Refused ! Terminating Connection ...")
-            self.client_socket.close()
+            self.secure_socket .close()
             return False
         else :
             print("Connection Accepted !\n")
             True
 
-    # New DES Key Every 1 Minute
-    def __HanldeDesRegen(self):
+    # New des_handler  Key Every 1 Minute
+    def refresh_des_key(self):
         while True:
             time.sleep(60)
             self.lock.acquire()
             try:
-                self.should_regenerate_des = True
+                self.regen_required  = True
             finally:
                 self.lock.release()
-            print("\nWarn: Should Regenerate DES Key Now")
+            print("\nWarn: Should Regenerate des_handler  Key Now")
 
             # Wait Until it's set back to false
             while True: 
                 self.lock.acquire()
                 try:
-                    if self.should_regenerate_des == False:
+                    if self.regen_required  == False:
                         time.sleep(0.1)
                         break
                 finally:
                     self.lock.release()
                     time.sleep(4)
     
-    def __ConstructMessage(self, message: str, type: str):
+    def encrypt_message(self, message: str, type: str):
         payload = {
             'type': type,
             'message': message
         }
         return json.dumps(payload)
     
-    def __HandleMessage(self):
+    def handle_encrypted_communication(self):
         # Handle Incoming / Outgoing Message
         message = input(" -> ") 
 
         while message.strip() != 'bye':
             # Encrypt the string before send to server
-            message = self.__ConstructMessage(message, 'MSG').encode('utf-8')  
-            encrypted_message = self.DES.Encrypt(message, self.des_key)
-            self.client_socket.send(encrypted_message) 
+            message = self.encrypt_message(message, 'MSG').encode('utf-8')  
+            encrypted_message = self.des_handler .Encrypt(message, self.shared_key)
+            self.secure_socket .send(encrypted_message) 
 
             # Listen to response
-            data = self.client_socket.recv(3024)
+            data = self.secure_socket .recv(3024)
 
             # Decrypt the encrypted message from server
             print('\nRaw from Client: ' + str(data))
-            raw_msg = self.DES.Decrypt_using_key(data, self.des_key)
+            raw_msg = self.des_handler .Decrypt_using_key(data, self.shared_key)
             msg = json.loads(raw_msg)
             
             print("decrypted from client: ", msg)
@@ -134,51 +134,51 @@ class ClientProgram():
 
             self.lock.acquire()
             try:
-                if self.should_regenerate_des == True:
-                    self.should_regenerate_des = False
-                    message = self.__ConstructMessage('Re-Generate DES', 'GENERATE').encode('utf-8')  
-                    encrypted_message = self.DES.Encrypt(message, self.des_key)
-                    self.client_socket.send(encrypted_message)
+                if self.regen_required  == True:
+                    self.regen_required  = False
+                    message = self.encrypt_message('Re-Generate des_handler ', 'GENERATE').encode('utf-8')  
+                    encrypted_message = self.des_handler .Encrypt(message, self.shared_key)
+                    self.secure_socket .send(encrypted_message)
 
-                    # Send DES Key
-                    print("\nSending DES Key to Client B ....")
-                    self.des_key = self.DES.Random_Bytes(8)
+                    # Send des_handler  Key
+                    print("\nSending des_handler  Key to Client B ....")
+                    self.shared_key = self.des_handler .Random_Bytes(8)
 
                     # Encrypt with our private key
-                    encrypted_des = self.RSA.encrypt(self.des_key.hex(), self.local_RSA.private_key) 
+                    encrypted_des = self.rsa_handler .encrypt(self.shared_key.hex(), self.local_keys .private_key) 
                     # Encrypt with Client B public key
-                    encrypted_des = self.RSA.encrypt(self.pack_rsa(encrypted_des).hex(), self.client_RSA.public_key)
-                    self.client_socket.send(self.pack_rsa(encrypted_des))
+                    encrypted_des = self.rsa_handler .encrypt(self.pack_rsa(encrypted_des).hex(), self.partner_keys .public_key)
+                    self.secure_socket .send(self.pack_rsa(encrypted_des))
 
-                    print(f"New DES Key: ", self.des_key, '\n')
+                    print(f"New des_handler  Key: ", self.shared_key, '\n')
             finally:
                 self.lock.release()
 
             message = input(" -> ")
 
-        self.client_socket.close()
-        self.public_socket.close()
+        self.secure_socket .close()
+        self.auth_socket .close()
 
-    def Start(self):
-        if self.__StartPublicAuthSocket() == False:
+    def start(self):
+        if self.initiate_auth_connection() == False:
             return
         
-        # Receive Server RSA keys from server
-        print("Waiting for Public Authority to send it's RSA Public Key...")
-        server_data = self.public_socket.recv(3024)
-        self.public_auth.public_key = self.unpack_tuple(server_data)
-        print(f"Public Authority - Public Key : ", self.public_auth.public_key, '\n')
+        # Receive Server rsa_handler  keys from server
+        print("Waiting for Public Authority to send it's rsa_handler  Public Key...")
+        server_data = self.auth_socket .recv(3024)
+        self.auth_keys .public_key = self.unpack_tuple(server_data)
+        print(f"Public Authority - Public Key : ", self.auth_keys .public_key, '\n')
 
-        # Send our RSA Keys to Public Authority Server
+        # Send our rsa_handler  Keys to Public Authority Server
         print("Register our Public key to Public Authority Server....")
-        self.local_RSA.public_key, self.local_RSA.private_key = self.RSA.generate_keypair()
-        self.public_socket.send(self.pack_tuple(self.local_RSA.public_key))        
+        self.local_keys .public_key, self.local_keys .private_key = self.rsa_handler .generate_keypair()
+        self.auth_socket .send(self.pack_tuple(self.local_keys .public_key))        
 
-        print(f"Local RSA - Public Key : ", self.local_RSA.public_key)
-        print(f"Local RSA - Private Key: ", self.local_RSA.private_key, '\n')
+        print(f"Local rsa_handler  - Public Key : ", self.local_keys .public_key)
+        print(f"Local rsa_handler  - Private Key: ", self.local_keys .private_key, '\n')
 
         # Set our ID identity
-        self.client_id = self.public_socket.recv(3024).decode()
+        self.client_id = self.auth_socket .recv(3024).decode()
         print(f"Our Identity: ", self.client_id, "\n")
 
         # Wait for Client B & Request it's public key from Public Authority
@@ -189,37 +189,37 @@ class ClientProgram():
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")  
         }
 
-        self.public_socket.sendall(json.dumps(payload).encode('utf-8'))
+        self.auth_socket .sendall(json.dumps(payload).encode('utf-8'))
 
-        response = self.public_socket.recv(3024)
+        response = self.auth_socket .recv(3024)
         response = self.unpack_rsa(response)
-        response_json = json.loads(self.RSA.decrypt(response, self.public_auth.public_key))
-        self.client_RSA.public_key = self.unpack_tuple(bytes.fromhex(response_json['public_key']))
+        response_json = json.loads(self.rsa_handler .decrypt(response, self.auth_keys .public_key))
+        self.partner_keys .public_key = self.unpack_tuple(bytes.fromhex(response_json['public_key']))
         print(f"Public Authority Response: ", response_json)
-        print(f"Client B - Public Key: ", self.client_RSA.public_key, '\n')
+        print(f"Client B - Public Key: ", self.partner_keys .public_key, '\n')
 
         # Make client connection
-        if self.__StartClientSocket() == False:
+        if self.initiate_secure_connection() == False:
             return
         
         # Send Our Identifier (IDa) and Nonce (N1) to client B
-        N1 = self.DES.Random_Bytes(8).hex()
+        N1 = self.des_handler .Random_Bytes(8).hex()
         payload = {
             "type": "STEP_3",
             "client_id": "A",
             "N1": N1
         }
 
-        message = self.RSA.encrypt(json.dumps(payload), self.client_RSA.public_key)
-        self.client_socket.send(self.pack_rsa(message))
+        message = self.rsa_handler .encrypt(json.dumps(payload), self.partner_keys .public_key)
+        self.secure_socket .send(self.pack_rsa(message))
         print(f"Data sent to client - B :", json.dumps(payload))
         print(f"encrypted:", self.pack_rsa(message), "\n")
 
         # Wait for client B message
         print("Getting response from client B ....")
-        b_message = self.client_socket.recv(3024)
+        b_message = self.secure_socket .recv(3024)
         message = self.unpack_rsa(b_message)
-        message_json = json.loads(self.RSA.decrypt(message, self.local_RSA.private_key))
+        message_json = json.loads(self.rsa_handler .decrypt(message, self.local_keys .private_key))
         print(message_json)
 
         if(message_json['N1'] != N1):
@@ -234,39 +234,28 @@ class ClientProgram():
         }
 
         # Send a message again to client B
-        message = self.RSA.encrypt(json.dumps(final_payload), self.client_RSA.public_key)
-        self.client_socket.send(self.pack_rsa(message))
+        message = self.rsa_handler .encrypt(json.dumps(final_payload), self.partner_keys .public_key)
+        self.secure_socket .send(self.pack_rsa(message))
 
-        # Send DES Key
+        # Send des_handler  Key
         print(f"\nData sent to client - B :", json.dumps(final_payload))
-        print("\nSending DES Key to Client B ....")
-        self.des_key = self.DES.Random_Bytes(8)
+        print("\nSending des_handler  Key to Client B ....")
+        self.shared_key = self.des_handler .Random_Bytes(8)
 
         # Encrypt with our private key
-        encrypted_des = self.RSA.encrypt(self.des_key.hex(), self.local_RSA.private_key) 
+        encrypted_des = self.rsa_handler .encrypt(self.shared_key.hex(), self.local_keys .private_key) 
         # Encrypt with Client B public key
-        encrypted_des = self.RSA.encrypt(self.pack_rsa(encrypted_des).hex(), self.client_RSA.public_key)
-        self.client_socket.send(self.pack_rsa(encrypted_des))
+        encrypted_des = self.rsa_handler .encrypt(self.pack_rsa(encrypted_des).hex(), self.partner_keys .public_key)
+        self.secure_socket .send(self.pack_rsa(encrypted_des))
 
-        print(f"DES Key: ", self.des_key, '\n')
+        print(f"des_handler  Key: ", self.shared_key, '\n')
 
-        thread = threading.Thread(target=self.__HanldeDesRegen, daemon=True)
+        thread = threading.Thread(target=self.refresh_des_key, daemon=True)
         thread.start()
 
         # Handle Encrypted Communication
-        self.__HandleMessage()
+        self.handle_encrypted_communication()
 
 
 if __name__ == '__main__':
-    Program = ClientProgram()
-    Program.Start()
-    
-
-
-# Keys are distributed and exchange using secure RSA Keys
-
-# 1. Client send keys -> Server receive keys
-# 2. Server send keys -> Client receive key
-
-# 1. Client encrypt -> Server Decrypt
-# 2. Server Encrypt -> Client Decrypt
+    SecureClient().start()

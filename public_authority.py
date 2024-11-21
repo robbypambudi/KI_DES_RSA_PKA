@@ -31,24 +31,20 @@ class PublicAuthority():
         self.client_counter = 0 
         self.lock = threading.Lock()
 
-    @staticmethod
     def pack_tuple(int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
 
-    @staticmethod
     def unpack_tuple(packed_data: bytes) -> tuple[int, int]:
         return struct.unpack('qq', packed_data)
     
-    @staticmethod
     def pack_rsa(encrypted_message):
         return struct.pack(f'<{len(encrypted_message)}Q', *encrypted_message)
 
-    @staticmethod
     def unpack_rsa(packed_message):
         num_integers = len(packed_message) // 8 
         return list(struct.unpack(f'<{num_integers}Q', packed_message))
 
-    def __StartServerSocket(self):
+    def start_server_socket(self):
         self.server_socket.bind((self.host, self.port)) 
         self.server_socket.listen(2)
 
@@ -57,10 +53,10 @@ class PublicAuthority():
             client_connection, client_address = self.server_socket.accept()
             print(f"Connected to a client from: {client_address}")
     
-            thread = threading.Thread(target=self.__HandleClient, args=(client_connection, client_address))
+            thread = threading.Thread(target=self.handle_client, args=(client_connection, client_address))
             thread.start()
 
-    def __HandleClient(self, connection: ssl.SSLSocket, address: Tuple[str, int]):
+    def handle_client(self, connection: ssl.SSLSocket, address: Tuple[str, int]):
         # Send Our Public Key
         connection.send(self.pack_tuple(self.local_RSA.public_key))
 
@@ -129,7 +125,7 @@ class PublicAuthority():
         print(f"Local Public Key : ", self.local_RSA.public_key)
         print(f"Local Private Key : ", self.local_RSA.private_key, '\n')
 
-        self.__StartServerSocket()
+        self.start_server_socket()
 
 
 if __name__ == '__main__':
