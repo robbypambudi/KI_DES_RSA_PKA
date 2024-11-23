@@ -31,13 +31,13 @@ class PublicAuthority():
         self.client_counter = 0 
         self.lock = threading.Lock()
 
-    def pack_tuple(int_tuple: tuple[int, int]) -> bytes:
+    def pack_tuple(self, int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
 
-    def unpack_tuple(packed_data: bytes) -> tuple[int, int]:
+    def unpack_tuple(self, packed_data: bytes) -> tuple[int, int]:
         return struct.unpack('qq', packed_data)
     
-    def pack_rsa(encrypted_message):
+    def pack_rsa(self, encrypted_message):
         return struct.pack(f'<{len(encrypted_message)}Q', *encrypted_message)
 
     def unpack_rsa(packed_message):
@@ -61,7 +61,7 @@ class PublicAuthority():
         connection.send(self.pack_tuple(self.local_RSA.public_key))
 
         # Receive Client Public Key
-        client_data = connection.recv(1024)
+        client_data = connection.recv(3024)
         client_key = self.unpack_tuple(client_data)
         print(f"[Register] Client", address, "- Public Key:", client_key)
 
@@ -81,11 +81,11 @@ class PublicAuthority():
         connection.send(key_index.encode())
 
         # Check if client is requesting a public key
-        client_data = connection.recv(1024)
-        received_data = json.loads(client_data.decode('utf-8'))
+        client_data = connection.recv(3024)
+        received_data = {k.strip(): v for k, v in json.loads(client_data.decode('utf-8')).items()}
         print("Received data:", received_data, '\n')
 
-        if received_data['type'] == 'REQUEST_PUBLIC_KEY' and received_data['id']  != key_index:
+        if received_data['type'] == 'REQUEST_PUBLIC_KEY' and received_data['client_id'] != key_index:
             while True: 
                 self.lock.acquire()
                 try:
@@ -97,7 +97,8 @@ class PublicAuthority():
                     time.sleep(2)
 
             # send the requested public key
-            raw_public_key = self.pack_tuple(self.store[received_data['id']].public_key)
+
+            raw_public_key = self.pack_tuple(self.store[received_data['client_id']].public_key)
             data = {"public_key": raw_public_key.hex(), "timestamp":received_data['timestamp'] }
             message = self.RSA.encrypt(json.dumps(data), self.local_RSA.private_key)
             connection.send(self.pack_rsa(message))
@@ -107,7 +108,8 @@ class PublicAuthority():
             print()
         # Handle Incoming / Outgoing Message
         while True:
-            data = connection.recv(1024).decode()
+            data = connection.recv(3024).decode()
+            print(f"Message from {address}: {data}")
             if not data:
                 break
             # Decrypt the encrypted message from client. Convert to bytes from hex

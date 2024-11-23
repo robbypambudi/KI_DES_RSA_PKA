@@ -35,16 +35,16 @@ class SecureClient():
         self.des_key: bytes      = '\0'
         self.lock = threading.Lock()
 
-    def pack_tuple(int_tuple: tuple[int, int]) -> bytes:
+    def pack_tuple(self, int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
 
-    def unpack_tuple(packed_data: bytes) -> tuple[int, int]:
+    def unpack_tuple(self, packed_data: bytes) -> tuple[int, int]:
         return struct.unpack('qq', packed_data)
     
-    def pack_encrypted_data(encrypted_message):
+    def pack_encrypted_data(self, encrypted_message):
         return struct.pack(f'<{len(encrypted_message)}Q', *encrypted_message)
 
-    def unpack_encrypted_data(packed_message):
+    def unpack_encrypted_data(self, packed_message):
         num_integers = len(packed_message) // 8 
         return list(struct.unpack(f'<{num_integers}Q', packed_message))
     
@@ -97,7 +97,7 @@ class SecureClient():
                 print(f"des_handler  Key: ", self.des_key, '\n')
 
                 continue
-
+            print(" <- ", msg['message'])
             data = input(' -> ')
             # Encrypt the string before sending to client
             data = self.encrypt_message(data, 'MSG').encode('utf-8') 
@@ -113,14 +113,14 @@ class SecureClient():
         
         # Receive Server rsa_handler  keys from server
         print("Waiting for Public Authority to send it's rsa_handler  Public Key...")
-        server_data = self.auth_socket .recv(3024)
-        self.auth_keys .pub_key = self.unpack_tuple(server_data)
+        server_data = self.auth_socket.recv(3024)
+        self.auth_keys.pub_key = self.unpack_tuple(server_data)
         print(f"Public Authority - Public Key : ", self.auth_keys .pub_key, '\n')
 
         # Send our rsa_handler  Keys to Public Authority Server
         print("Register our Public key to Public Authority Server....")
         self.local_keys .pub_key, self.local_keys .priv_key = self.rsa_handler .generate_keypair()
-        self.auth_socket .send(self.pack_tuple(self.local_keys .pub_key))        
+        self.auth_socket.send(self.pack_tuple(self.local_keys .pub_key))        
 
         print(f"Local rsa_handler  - Public Key : ", self.local_keys .pub_key)
         print(f"Local rsa_handler  - Private Key: ", self.local_keys .priv_key, '\n')
@@ -140,7 +140,7 @@ class SecureClient():
         # Decrypt Client A message
         print("\nDecrypting client A message ...")
         message = self.unpack_encrypted_data(a_message)
-        message_json = json.loads(self.rsa_handler .decrypt(message, self.local_keys .priv_key))
+        message_json = json.loads(self.rsa_handler.decrypt(message, self.local_keys.priv_key))
         print(message_json)
         print()
 
@@ -150,17 +150,23 @@ class SecureClient():
         print("Requesting client A public key .....")
         payload = {
         "type": "REQUEST_PUBLIC_KEY",
-        "client_id ": message_json['client_id '],
+        "client_id ": message_json['client_id'],
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")  
         }
 
-        self.auth_socket .sendall(json.dumps(payload).encode('utf-8'))
+        self.auth_socket.sendall(json.dumps(payload).encode('utf-8'))
 
-        response = self.auth_socket .recv(3024)
+        response = self.auth_socket.recv(3024)
         response = self.unpack_encrypted_data(response)
-        response_json = json.loads(self.rsa_handler .decrypt(response, self.auth_keys .pub_key))
-        self.partner_keys .pub_key = self.unpack_tuple(bytes.fromhex(response_json['pub_key']))
-        print(f"Public Authority Response: ", response_json)
+        response_json = json.loads(self.rsa_handler .decrypt(response, self.auth_keys.pub_key))
+        print("\nDecrypting Public Authority message ...")
+        print(response_json)
+        if 'public_key' in response_json:
+            self.partner_keys.pub_key = self.unpack_tuple(bytes.fromhex(response_json['public_key']))
+            print(f"Public Authority Response: ", response_json)
+        else:
+            print("Error: 'public_key' not found in the response from Public Authority")
+            return
         print(f"Client A - Public Key: ", self.partner_keys .pub_key, '\n')
 
         # Send Our Response To Client A
@@ -206,12 +212,3 @@ class SecureClient():
 
 if __name__ == '__main__':
     SecureClient().start()
-
-
-# Keys are distributed and exchange using secure rsa_handler  Keys
-
-# 1. Client send keys -> Server receive keys
-# 2. Server send keys -> Client receive key
-
-# 1. Client encrypt -> Server Decrypt
-# 2. Server Encrypt -> Client Decrypt
