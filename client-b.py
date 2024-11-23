@@ -35,19 +35,15 @@ class SecureClient():
         self.des_key: bytes      = '\0'
         self.lock = threading.Lock()
 
-    @staticmethod
     def pack_tuple(int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
 
-    @staticmethod
     def unpack_tuple(packed_data: bytes) -> tuple[int, int]:
         return struct.unpack('qq', packed_data)
     
-    @staticmethod
     def pack_encrypted_data(encrypted_message):
         return struct.pack(f'<{len(encrypted_message)}Q', *encrypted_message)
 
-    @staticmethod
     def unpack_encrypted_data(packed_message):
         num_integers = len(packed_message) // 8 
         return list(struct.unpack(f'<{num_integers}Q', packed_message))
@@ -58,15 +54,7 @@ class SecureClient():
         self.server_address , self.server_port  = self.auth_socket .getpeername()
         print(f"Connected to Public Authority at {self.auth_port}")
 
-        # Additional Validation
-        confirm = input("Do you trust this server? (yes/no): ").lower()
-        if confirm.lower() == 'no' :
-            print("Server connection rejected.")
-            self.auth_socket .close()
-            return False
-        else :
-            print("Connection Accepted !\n")
-            True
+        return True
 
     def initiate_secure_connection(self):
         self.secure_socket.bind((self.hostname , self.secure_port )) 
@@ -76,15 +64,7 @@ class SecureClient():
         self.shared_key, self.client_address = self.secure_socket .accept()
         print(f"Connected securely at {self.secure_port}")
 
-        # Additional Validation
-        confirm = input("Do you trust this secure connection? (yes/no): ").lower()
-        if confirm.lower() == 'no' :
-            print("Connection Refused ! Terminating Connection ...")
-            self.shared_key.close()
-            return False
-        else :
-            print("Connection Accepted !")
-            True
+        return True
 
     def encrypt_message(self, msg: str, msg_type: str):
         return json.dumps({'type': msg_type, 'message': msg})

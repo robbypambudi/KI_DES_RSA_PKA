@@ -35,19 +35,15 @@ class SecureClient():
         self.lock                = threading.Lock()
         self.regen_required  = False
 
-    @staticmethod
     def pack_tuple(int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
 
-    @staticmethod
     def unpack_tuple(packed_data: bytes) -> tuple[int, int]:
         return struct.unpack('qq', packed_data)
     
-    @staticmethod
     def pack_rsa(encrypted_message):
         return struct.pack(f'<{len(encrypted_message)}Q', *encrypted_message)
 
-    @staticmethod
     def unpack_rsa(packed_message):
         num_integers = len(packed_message) // 8 
         return list(struct.unpack(f'<{num_integers}Q', packed_message))
@@ -57,30 +53,14 @@ class SecureClient():
         self.server_address , self.server_port  = self.auth_socket .getpeername()
         print(f"Connected to server at IP: {self.server_address }, Port: {self.server_port }")
 
-        # Additional Validation
-        confirmation = input("Do you want to accept this server connection? (yes/no): ")
-        if confirmation.lower() == 'no' :
-            print("Connection Refused ! Terminating Connection ...")
-            self.auth_socket .close()
-            return False
-        else :
-            print("Connection Accepted !\n")
-            True
+        return True
 
     def initiate_secure_connection(self):
         self.secure_socket .connect((self.hostname, self.secure_port )) 
         self.server_address , self.server_port  = self.secure_socket .getpeername()
         print(f"Connected to server at IP: {self.server_address }, Port: {self.server_port }")
 
-        # Additional Validation
-        confirmation = input("Do you want to accept this server connection? (yes/no): ")
-        if confirmation.lower() == 'no' :
-            print("Connection Refused ! Terminating Connection ...")
-            self.secure_socket .close()
-            return False
-        else :
-            print("Connection Accepted !\n")
-            True
+        return True
 
     # New des_handler  Key Every 1 Minute
     def refresh_des_key(self):
@@ -165,7 +145,7 @@ class SecureClient():
         
         # Receive Server rsa_handler  keys from server
         print("Waiting for Public Authority to send it's rsa_handler  Public Key...")
-        server_data = self.auth_socket .recv(3024)
+        server_data = self.auth_socket.recv(3024)
         self.auth_keys .public_key = self.unpack_tuple(server_data)
         print(f"Public Authority - Public Key : ", self.auth_keys .public_key, '\n')
 

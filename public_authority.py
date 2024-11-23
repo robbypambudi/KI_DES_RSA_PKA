@@ -11,7 +11,7 @@ import time
 Local_keys = ""
 client_Keys = ""
 
-class RSA_Container():
+class RSAPair():
     def __init__(self) -> None:
         self.public_key: tuple[int, int] = None
         self.private_key: tuple[int, int] = None
@@ -26,8 +26,8 @@ class PublicAuthority():
         self.client_keys:bytes    = ""
         self.DES            = Des()
         self.RSA            = RSA_Algorithm()
-        self.local_RSA      = RSA_Container()
-        self.store: dict[str, RSA_Container] = {}
+        self.local_RSA      = RSAPair()
+        self.store: dict[str, RSAPair] = {}
         self.client_counter = 0 
         self.lock = threading.Lock()
 
@@ -70,7 +70,7 @@ class PublicAuthority():
 
         self.lock.acquire()
         try:
-            temp = RSA_Container()
+            temp = RSAPair()
             temp.public_key = client_key
             self.store[key_index] = temp
             self.client_counter += 1
@@ -129,14 +129,4 @@ class PublicAuthority():
 
 
 if __name__ == '__main__':
-    Program = PublicAuthority()
-    Program.Start()
-
-
-# Keys are distributed and exchange using secure RSA Keys
-
-# 1. Client send keys -> Server receive keys
-# 2. Server send keys -> Client receive key
-
-# 1. Client encrypt -> Server Decrypt
-# 2. Server Encrypt -> Client Decrypt
+   PublicAuthority().Start()
