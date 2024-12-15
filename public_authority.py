@@ -19,17 +19,17 @@ class RSAPair():
 
 class PublicAuthority():
     def __init__(self) -> None:
-        self.host           = socket.gethostname()
-        self.port           = 5022
-        self.server_socket  = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.local_keys     = ""
-        self.client_keys:bytes    = ""
-        self.DES            = Des()
-        self.RSA            = RSA_Algorithm()
-        self.local_RSA      = RSAPair()
+        self.host               = socket.gethostname()
+        self.port               = 5022
+        self.server_socket      = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.local_keys         = ""
+        self.client_keys:bytes  = ""
+        self.DES                = Des()
+        self.RSA                = RSA_Algorithm()
+        self.local_RSA          = RSAPair()
         self.store: dict[str, RSAPair] = {}
-        self.client_counter = 0 
-        self.lock = threading.Lock()
+        self.client_counter     = 0 
+        self.lock               = threading.Lock()
 
     def pack_tuple(self, int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
@@ -48,7 +48,6 @@ class PublicAuthority():
         self.server_socket.bind((self.host, self.port)) 
         self.server_socket.listen(2)
 
-        # Accept two clients
         for _ in range(2): 
             client_connection, client_address = self.server_socket.accept()
             print(f"Connected to a client from: {client_address}")
@@ -57,10 +56,8 @@ class PublicAuthority():
             thread.start()
 
     def handle_client(self, connection: ssl.SSLSocket, address: Tuple[str, int]):
-        # Send Our Public Key
         connection.send(self.pack_tuple(self.local_RSA.public_key))
 
-        # Receive Client Public Key
         client_data = connection.recv(3024)
         client_key = self.unpack_tuple(client_data)
         print(f"[Register] Client", address, "- Public Key:", client_key)
@@ -70,17 +67,15 @@ class PublicAuthority():
 
         self.lock.acquire()
         try:
-            temp = RSAPair()
-            temp.public_key = client_key
-            self.store[key_index] = temp
-            self.client_counter += 1
+            temp                    = RSAPair()
+            temp.public_key         = client_key
+            self.store[key_index]   = temp
+            self.client_counter     += 1
         finally:
             self.lock.release()
 
-        # Send back client identity
         connection.send(key_index.encode())
 
-        # Check if client is requesting a public key
         client_data = connection.recv(3024)
         received_data = {k.strip(): v for k, v in json.loads(client_data.decode('utf-8')).items()}
         print("Received data:", received_data, '\n')
@@ -96,8 +91,6 @@ class PublicAuthority():
                     self.lock.release()
                     time.sleep(2)
 
-            # send the requested public key
-
             raw_public_key = self.pack_tuple(self.store[received_data['client_id']].public_key)
             data = {"public_key": raw_public_key.hex(), "timestamp":received_data['timestamp'] }
             message = self.RSA.encrypt(json.dumps(data), self.local_RSA.private_key)
@@ -106,13 +99,12 @@ class PublicAuthority():
             print(f"Data sent to client -", key_index, ": ")
             print(json.dumps(data))
             print()
-        # Handle Incoming / Outgoing Message
+
         while True:
             data = connection.recv(3024).decode()
             print(f"Message from {address}: {data}")
             if not data:
                 break
-            # Decrypt the encrypted message from client. Convert to bytes from hex
             print(f"Message from {address}: {data}")            
 
             response = input(' -> ')

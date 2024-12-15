@@ -17,23 +17,23 @@ class RSAPair():
 
 class SecureClient():
     def __init__(self) -> None:
-        self.client_id             = ""
-        self.hostname                = socket.gethostname()
-        self.auth_port          = 5022
-        self.secure_port          = 5023
-        self.auth_socket        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.secure_socket        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.shared_key: bytes      = '\0'
-        self.server_address            = ""
-        self.server_port          = ""
-        self.des_handler                  = Des()
-        self.rsa_handler                  = RSA_Algorithm()
-        self.auth_keys          = RSAPair()
-        self.local_keys            = RSAPair()
-        self.partner_keys           = RSAPair()
-        self.ssl_context         = None
-        self.lock                = threading.Lock()
-        self.regen_required  = False
+        self.client_id                  = ""
+        self.hostname                   = socket.gethostname()
+        self.auth_port                  = 5022
+        self.secure_port                = 5023
+        self.auth_socket                = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.secure_socket              = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.shared_key: bytes          = '\0'
+        self.server_address             = ""
+        self.server_port                = ""
+        self.des_handler                = Des()
+        self.rsa_handler                = RSA_Algorithm()
+        self.auth_keys                  = RSAPair()
+        self.local_keys                 = RSAPair()
+        self.partner_keys               = RSAPair()
+        self.ssl_context                = None
+        self.lock                       = threading.Lock()
+        self.regen_required             = False
 
     def pack_tuple(self, int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
@@ -60,7 +60,6 @@ class SecureClient():
         self.secure_socket .connect((self.hostname, self.secure_port )) 
         self.server_address , self.server_port  = self.secure_socket .getpeername()
         print(f"Connected to server at IP: {self.server_address }, Port: {self.server_port }")
-
         return True
 
     
@@ -145,21 +144,23 @@ class SecureClient():
         # Wait for Client B & Request it's public key from Public Authority
         print("Requesting client B public key .....")
         payload = {
-        "type": "REQUEST_PUBLIC_KEY",
-        "client_id": "B",
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")  
+            "type": "REQUEST_PUBLIC_KEY",
+            "client_id": "B",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")  
         }
 
         self.auth_socket.sendall(json.dumps(payload).encode('utf-8'))
 
         response = self.auth_socket.recv(3024)
         response = self.unpack_rsa(response)
-        print(response)
+
         decrypted_response = self.rsa_handler.decrypt(response, self.auth_keys.public_key)
         if not decrypted_response:
             raise ValueError("Decryption failed or response is empty")
+        
         response_json = json.loads(decrypted_response)
         self.partner_keys.public_key = self.unpack_tuple(bytes.fromhex(response_json['public_key']))
+
         print(f"Public Authority Response: ", response_json)
         print(f"Client B - Public Key: ", self.partner_keys .public_key, '\n')
 
@@ -183,6 +184,7 @@ class SecureClient():
         print("Getting response from client B ....")
         b_message = self.secure_socket.recv(3024)
         message = self.unpack_rsa(b_message)
+
         print("Encrypted message from client - B : ")
         print(message)
         message_json = json.loads(self.rsa_handler.decrypt(message, self.local_keys.private_key))

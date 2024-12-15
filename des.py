@@ -2,29 +2,27 @@ import struct
 import secrets
 import string
 
-class __Random():
-    @staticmethod
+class Random():
     def Random_ASCII (length :int) -> str:
         characters = string.ascii_letters + string.digits
         random_string = ''.join(secrets.choice(characters) for _ in range(length))
 
         return random_string
 
-    @staticmethod
     def Random_Bytes (num_bytes: int) -> bytes:
         return secrets.token_bytes(num_bytes)
 
-class Des(__Random):
-    # Initial Permutation Table for DES (IP)
+class Des(Random):
+
     __INITIAL_PERMUTATION: tuple[int]= [
-    57, 49, 41, 33, 25, 17, 9,  1,
-    59, 51, 43, 35, 27, 19, 11, 3,
-    61, 53, 45, 37, 29, 21, 13, 5,
-    63, 55, 47, 39, 31, 23, 15, 7,
-    56, 48, 40, 32, 24, 16, 8,  0,
-    58, 50, 42, 34, 26, 18, 10, 2,
-    60, 52, 44, 36, 28, 20, 12, 4,
-    62, 54, 46, 38, 30, 22, 14, 6,
+        57, 49, 41, 33, 25, 17, 9,  1,
+        59, 51, 43, 35, 27, 19, 11, 3,
+        61, 53, 45, 37, 29, 21, 13, 5,
+        63, 55, 47, 39, 31, 23, 15, 7,
+        56, 48, 40, 32, 24, 16, 8,  0,
+        58, 50, 42, 34, 26, 18, 10, 2,
+        60, 52, 44, 36, 28, 20, 12, 4,
+        62, 54, 46, 38, 30, 22, 14, 6,
     ]
     
     # Inverse Or Final permutation IP^-1 (FP) 
@@ -145,43 +143,33 @@ class Des(__Random):
         self.__key         : bytes | bytearray       = '\0'
         self.__subkey      : tuple[tuple[int, ...]]  = ()
 
-    @property
     def INITIAL_PERMUTATION(self):
         return type(self).__INITIAL_PERMUTATION
     
-    @property
     def INVERSE_PERMUTATION(self):
         return type(self).__INVERSE_PERMUTATION
     
-    @property
     def PERMUTED_CHOICE1(self):
         return type(self).__PERMUTED_CHOICE1
     
-    @property
     def PERMUTED_CHOICE2(self):
         return type(self).__PERMUTED_CHOICE2
     
-    @property
     def EXPANSION(self):
         return type(self).__EXPANSION
     
-    @property
     def SBOX(self):
         return type(self).__SBOX
     
-    @property
     def P32_SBOX(self):
         return type(self).__P32_SBOX
     
-    @property
     def SHIFTS(self):
         return type(self).__SHIFTS
         
-    @staticmethod
     def __left_circular_shift(i28: int, k: int) -> int:
         return i28 << k & 0x0fffffff | i28 >> 28 - k
 
-    @staticmethod
     def __permute(data: int, bits: int, mapper: tuple[int]) -> int:
         ret = 0
         for i, v in enumerate(mapper):
@@ -190,28 +178,21 @@ class Des(__Random):
         return ret
 
     def __feistel(self, right_block: list[int], key: int) -> int:
-        # Step 1: Expansion /Permutation (input: 32 bits , output: 48 bits)
         expanded_right = self.__permute(right_block, 32, self.EXPANSION) 
         
-        # Step 2: XOR with the subkey (input/output : 48 bits)
         xor_result = expanded_right ^ key
 
-        # Step 3: S-Box substitution (input: 48bits, output: 32 bits)
         ret = 0
         for i, box in enumerate(self.SBOX):
             i6 = xor_result >> 42 - i * 6 & 0x3f
             ret = ret << 4 | box[i6 & 0x20 | (i6 & 0x01) << 4 | (i6 & 0x1e) >> 1]
 
-        # Step 4: 32-bit permutation after s-box
         return self.__permute(ret, 32, self.P32_SBOX)
 
-
     def __key_schedule(self, key: bytes):
-        # Get the 56-bit key from PC1
         keys, = struct.unpack(">Q", key[:8])
         next_key = self.__permute(keys, 64, self.PERMUTED_CHOICE1) & 0xFFFFFFFFFFFFFF 
 
-        # Split the keys to 28 bit each
         left_half = (next_key >> 28)
         right_half = next_key & 0x0FFFFFFF  
 
@@ -219,35 +200,27 @@ class Des(__Random):
             left_half = self.__left_circular_shift(left_half, bits)
             right_half = self.__left_circular_shift(right_half, bits)
 
-            # Combine back into a single integer (56 bit)
             combined_key = (left_half << 28) | right_half
 
-            # Get the 48 bits subkey based on PC2
             yield self.__permute(combined_key, 56, self.PERMUTED_CHOICE2)
 
     def __encode_block(self, data_block: int, key: tuple[int], encryption: bool) -> int:
-        # Initial permute the 64 bits block (8 bytes) of plain text
         permuted_block = self.__permute(data_block, 64, self.INITIAL_PERMUTATION)
 
-        # Split the permuted block into left and right (32 bits each)
         left = permuted_block >> 32
         right = permuted_block & 0xFFFFFFFF
 
-        # Reverse keys if decryption
         if not encryption:
             key = reversed(key)
 
         for subkey in key:
-            new_left = right                               # Right becomes new left
-            right = left ^ self.__feistel(right, subkey)   # XOR left with the feistel function
+            new_left    = right                             
+            right       = left ^ self.__feistel(right, subkey)  
 
-            # Update for the next round
             left, right = new_left, right
 
-        # Combine halves becoming 64 bits
         combined_block = (right << 32) | left
 
-        # Apply Final Permutation
         return self.__permute(combined_block, 64, self.INVERSE_PERMUTATION)
     
 
@@ -275,18 +248,17 @@ class Des(__Random):
         return tuple(tuple(self.__key_schedule(k)) for k in (k0, k1, k2))
     
     def __encrypt(self) -> bytes:
-        # Slice message to be 8 bytes or 64 bits each per block
         blocks: list[int] = []
+
         for i in range(0, len(self.__plain_text), 8):
             block_bytes = self.__plain_text[i:i + 8]
-            # pad with zeros if it's not reaching 8 bytes
+            
             block = struct.unpack(">Q", block_bytes.ljust(8, b'\0'))[0] 
             blocks.append(block)  
 
-        # Generate 16 subkeys for encryptions    
+
         self.__subkey = self.__GenerateSubKeys()
 
-        # Encrypt each blocks
         encoded_blocks = self.__ECB(blocks, self.__subkey, True)
 
         result = b"".join(struct.pack(">Q", block) for block in encoded_blocks)

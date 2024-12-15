@@ -16,24 +16,24 @@ class RSAPair():
 class SecureClient():
     def __init__(self) -> None:
         self.client_id              = ""
-        self.hostname                 = socket.gethostname()
-        self.auth_port          = 5022
-        self.secure_port          = 5023
-        self.auth_socket        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.secure_socket        = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.shared_key   = None
-        self.local_keys : bytes  = '\0'
-        self.server_keys: bytes  = '\0'
-        self.server_address            = ""
-        self.server_port          = ""
-        self.client_address = ""
-        self.des_handler                  = Des()
-        self.rsa_handler                  = RSA_Algorithm()
-        self.auth_keys          = RSAPair()
-        self.local_keys            = RSAPair()
+        self.hostname               = socket.gethostname()
+        self.auth_port              = 5022
+        self.secure_port            = 5023
+        self.auth_socket            = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.secure_socket          = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.shared_key             = None
+        self.local_keys : bytes     = '\0'
+        self.server_keys: bytes     = '\0'
+        self.server_address         = ""
+        self.server_port            = ""
+        self.client_address         = ""
+        self.des_handler            = Des()
+        self.rsa_handler            = RSA_Algorithm()
+        self.auth_keys              = RSAPair()
+        self.local_keys             = RSAPair()
         self.partner_keys           = RSAPair()
-        self.des_key: bytes      = '\0'
-        self.lock = threading.Lock()
+        self.des_key: bytes         = '\0'
+        self.lock                   = threading.Lock()
 
     def pack_tuple(self, int_tuple: tuple[int, int]) -> bytes:
         return struct.pack('qq', *int_tuple) 
@@ -159,8 +159,9 @@ class SecureClient():
         response = self.auth_socket.recv(3024)
         response = self.unpack_encrypted_data(response)
         response_json = json.loads(self.rsa_handler .decrypt(response, self.auth_keys.pub_key))
+
         print("\nDecrypting Public Authority message ...")
-        print(response_json)
+
         if 'public_key' in response_json:
             self.partner_keys.pub_key = self.unpack_tuple(bytes.fromhex(response_json['public_key']))
             print(f"Public Authority Response: ", response_json)
@@ -170,7 +171,7 @@ class SecureClient():
         print(f"Client A - Public Key: ", self.partner_keys .pub_key, '\n')
 
         # Send Our Response To Client A
-        N2 = self.des_handler .Random_Bytes(8).hex()
+        N2 = self.des_handler.Random_Bytes(8).hex()
         payload = {
             "type": "STEP_6",
             "client_id ": "B",
@@ -200,9 +201,9 @@ class SecureClient():
         unpacked_key = self.unpack_encrypted_data(message)
 
         # Decrypt with  Our Private Key
-        encrypted_des = bytes.fromhex(self.rsa_handler .decrypt(unpacked_key, self.local_keys .priv_key))
+        encrypted_des = bytes.fromhex(self.rsa_handler.decrypt(unpacked_key, self.local_keys .priv_key))
         # Decrypt with Client A Public Key
-        self.des_key = bytes.fromhex(self.rsa_handler .decrypt(self.unpack_encrypted_data(encrypted_des), self.partner_keys .pub_key))
+        self.des_key = bytes.fromhex(self.rsa_handler.decrypt(self.unpack_encrypted_data(encrypted_des), self.partner_keys.pub_key))
         
         print(f"des_handler  Key: ", self.des_key, '\n')
         
